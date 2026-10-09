@@ -1,0 +1,210 @@
+-- ===================================================
+-- TeamForge PostgreSQL Database Schema
+-- Final Year Engineering Project Schema Definition
+-- ===================================================
+
+DROP TABLE IF EXISTS task_comments CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS recommendation_reasons CASCADE;
+DROP TABLE IF EXISTS recommendations CASCADE;
+DROP TABLE IF EXISTS team_invitations CASCADE;
+DROP TABLE IF EXISTS team_members CASCADE;
+DROP TABLE IF EXISTS teams CASCADE;
+DROP TABLE IF EXISTS project_skills CASCADE;
+DROP TABLE IF EXISTS projects CASCADE;
+DROP TABLE IF EXISTS user_skills CASCADE;
+DROP TABLE IF EXISTS skills CASCADE;
+DROP TABLE IF EXISTS student_profiles CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS activities CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+-- 1. USERS
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(120) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    college VARCHAR(150) NOT NULL,
+    department VARCHAR(100) NOT NULL,
+    year VARCHAR(20) NOT NULL,
+    role VARCHAR(30) NOT NULL DEFAULT 'STUDENT',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. STUDENT PROFILES
+CREATE TABLE student_profiles (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    bio TEXT,
+    profile_photo VARCHAR(255),
+    preferred_role VARCHAR(100),
+    secondary_role VARCHAR(100),
+    project_interests TEXT, -- Comma-separated or JSON list of domains
+    availability_hours INT DEFAULT 15,
+    previous_project_count INT DEFAULT 0,
+    leadership_experience BOOLEAN DEFAULT FALSE,
+    preferred_team_size INT DEFAULT 4,
+    communication_preference VARCHAR(50) DEFAULT 'Slack / Discord',
+    work_preference VARCHAR(50) DEFAULT 'Hybrid',
+    github_url VARCHAR(255),
+    linkedin_url VARCHAR(255),
+    portfolio_url VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. SKILLS TAXONOMY
+CREATE TABLE skills (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    category VARCHAR(50) NOT NULL DEFAULT 'OTHER', -- BACKEND, FRONTEND, DATABASE, AI_ML, DEVOPS, MOBILE, TESTING, UI_UX, OTHER
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. USER SKILLS
+CREATE TABLE user_skills (
+    id BIGSERIAL PRIMARY KEY,
+    profile_id BIGINT NOT NULL REFERENCES student_profiles(id) ON DELETE CASCADE,
+    skill_id BIGINT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    proficiency_level VARCHAR(30) NOT NULL DEFAULT 'INTERMEDIATE', -- BEGINNER, INTERMEDIATE, ADVANCED, EXPERT
+    CONSTRAINT uk_user_skill UNIQUE (profile_id, skill_id)
+);
+
+-- 5. PROJECTS
+CREATE TABLE projects (
+    id BIGSERIAL PRIMARY KEY,
+    owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(150) NOT NULL,
+    description TEXT NOT NULL,
+    problem_statement TEXT,
+    domain VARCHAR(50) NOT NULL, -- AI_ML, WEB_DEV, MOBILE_DEV, CYBERSECURITY, CLOUD, IOT, DATA_SCIENCE, BLOCKCHAIN, HEALTHCARE, FINTECH, EDUCATION, SUSTAINABILITY, OTHER
+    status VARCHAR(30) NOT NULL DEFAULT 'RECRUITING', -- IDEA, RECRUITING, IN_PROGRESS, COMPLETED, ARCHIVED
+    difficulty VARCHAR(30) NOT NULL DEFAULT 'INTERMEDIATE', -- BEGINNER, INTERMEDIATE, ADVANCED
+    preferred_team_size INT NOT NULL DEFAULT 4,
+    current_team_size INT NOT NULL DEFAULT 1,
+    weekly_commitment_hours INT DEFAULT 15,
+    deadline DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 6. PROJECT SKILLS
+CREATE TABLE project_skills (
+    id BIGSERIAL PRIMARY KEY,
+    project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    skill_id BIGINT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    is_mandatory BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT uk_project_skill UNIQUE (project_id, skill_id)
+);
+
+-- 7. TEAMS
+CREATE TABLE teams (
+    id BIGSERIAL PRIMARY KEY,
+    project_id BIGINT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
+    name VARCHAR(150) NOT NULL,
+    leader_id BIGINT NOT NULL REFERENCES users(id),
+    status VARCHAR(30) NOT NULL DEFAULT 'RECRUITING',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 8. TEAM MEMBERS
+CREATE TABLE team_members (
+    id BIGSERIAL PRIMARY KEY,
+    team_id BIGINT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    assigned_role VARCHAR(100) NOT NULL DEFAULT 'Developer',
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_team_member UNIQUE (team_id, user_id)
+);
+
+-- 9. TEAM INVITATIONS
+CREATE TABLE team_invitations (
+    id BIGSERIAL PRIMARY KEY,
+    team_id BIGINT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    inviter_id BIGINT NOT NULL REFERENCES users(id),
+    invitee_id BIGINT NOT NULL REFERENCES users(id),
+    message TEXT,
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING', -- PENDING, ACCEPTED, REJECTED, CANCELLED
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 10. RECOMMENDATIONS
+CREATE TABLE recommendations (
+    id BIGSERIAL PRIMARY KEY,
+    project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    candidate_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    score DOUBLE PRECISION NOT NULL,
+    skill_match_score DOUBLE PRECISION NOT NULL,
+    skill_complementarity_score DOUBLE PRECISION NOT NULL,
+    role_compatibility_score DOUBLE PRECISION NOT NULL,
+    interest_match_score DOUBLE PRECISION NOT NULL,
+    experience_compatibility_score DOUBLE PRECISION NOT NULL,
+    availability_match_score DOUBLE PRECISION NOT NULL,
+    preference_match_score DOUBLE PRECISION NOT NULL,
+    team_balance_score DOUBLE PRECISION NOT NULL,
+    generated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. RECOMMENDATION REASONS
+CREATE TABLE recommendation_reasons (
+    id BIGSERIAL PRIMARY KEY,
+    recommendation_id BIGINT NOT NULL REFERENCES recommendations(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    explanation_text TEXT NOT NULL,
+    is_positive BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- 12. TASKS
+CREATE TABLE tasks (
+    id BIGSERIAL PRIMARY KEY,
+    project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    team_id BIGINT REFERENCES teams(id) ON DELETE CASCADE,
+    title VARCHAR(150) NOT NULL,
+    description TEXT,
+    status VARCHAR(30) NOT NULL DEFAULT 'TODO', -- TODO, IN_PROGRESS, REVIEW, DONE
+    priority VARCHAR(30) NOT NULL DEFAULT 'MEDIUM', -- LOW, MEDIUM, HIGH, CRITICAL
+    assignee_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    due_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 13. TASK COMMENTS
+CREATE TABLE task_comments (
+    id BIGSERIAL PRIMARY KEY,
+    task_id BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    comment_text TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. NOTIFICATIONS
+CREATE TABLE notifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(150) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(50) DEFAULT 'INFO',
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 15. ACTIVITIES
+CREATE TABLE activities (
+    id BIGSERIAL PRIMARY KEY,
+    project_id BIGINT REFERENCES projects(id) ON DELETE CASCADE,
+    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    activity_type VARCHAR(50) NOT NULL,
+    description TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- INDEXES FOR PERFORMANCE
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_projects_domain ON projects(domain);
+CREATE INDEX idx_projects_status ON projects(status);
+CREATE INDEX idx_tasks_project ON tasks(project_id);
+CREATE INDEX idx_recommendations_project ON recommendations(project_id);
